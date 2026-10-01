@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Resume Screener</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
+
+    header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+      color: #fff; padding: 2rem 2.5rem; display: flex; align-items: center; gap: 1rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    header svg { flex-shrink: 0; }
+    header h1 { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.5px; }
+    header p  { font-size: 0.9rem; color: #a0aec0; margin-top: 0.2rem; }
+
+    main { max-width: 1100px; margin: 2rem auto; padding: 0 1.5rem; }
+
+    /* Upload card */
+    .card {
+      background: #fff; border-radius: 16px; padding: 2rem;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 2rem;
+    }
+    .card h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1.2rem; color: #2d3748; }
+
+    .drop-zone {
+      border: 2px dashed #cbd5e0; border-radius: 12px; padding: 2.5rem 1rem;
+      text-align: center; cursor: pointer; transition: all 0.2s;
+      background: #f7fafc; position: relative;
+    }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: #4299e1; background: #ebf8ff; }
+    .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .drop-zone .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .drop-zone p { color: #718096; font-size: 0.95rem; }
+    .drop-zone p span { color: #4299e1; font-weight: 600; }
+    .drop-zone .hint { font-size: 0.8rem; color: #a0aec0; margin-top: 0.3rem; }
+
+    #file-list { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .file-chip {
+      background: #ebf8ff; border: 1px solid #bee3f8; color: #2b6cb0;
+      border-radius: 20px; padding: 0.3rem 0.8rem; font-size: 0.82rem;
+      display: flex; align-items: center; gap: 0.4rem;
+    }
+    .file-chip button { background: none; border: none; cursor: pointer; color: #718096; font-size: 1rem; line-height: 1; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.7rem 1.8rem; border-radius: 8px; font-size: 0.95rem;
+      font-weight: 600; cursor: pointer; border: none; transition: all 0.2s;
+    }
+    .btn-primary { background: #4299e1; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #3182ce; }
+    .btn-primary:disabled { background: #a0aec0; cursor: not-allowed; }
+    .btn-secondary { background: #edf2f7; color: #4a5568; }
+    .btn-secondary:hover { background: #e2e8f0; }
+
+    .actions { display: flex; gap: 0.8rem; margin-top: 1.2rem; align-items: center; }
+
+    /* Progress */
+    #progress-wrap { display: none; margin-top: 1rem; }
+    .progress-bar-bg { background: #e2e8f0; border-radius: 99px; height: 8px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg,#4299e1,#63b3ed); border-radius: 99px; width: 0%; transition: width 0.4s; }
+    #progress-label { font-size: 0.82rem; color: #718096; margin-top: 0.4rem; }
+
+    /* Stats bar */
+    #stats-bar { display: none; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; }
+    .stat-box {
+      background: #fff; border-radius: 12px; padding: 1.2rem 1rem; text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+    .stat-box .num { font-size: 2rem; font-weight: 700; }
+    .stat-box .lbl { font-size: 0.78rem; color: #718096; margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .c-blue   { color: #4299e1; }
+    .c-green  { color: #48bb78; }
+    .c-orange { color: #ed8936; }
+    .c-red    { color: #fc8181; }
+    .c-purple { color: #9f7aea; }
+
+    /* Results table */
+    #results-section { display: none; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .section-header h2 { font-size: 1.1rem; font-weight: 600; color: #2d3748; }
+
+    .filter-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .filter-btn {
+      padding: 0.35rem 0.9rem; border-radius: 20px; font-size: 0.82rem;
+      border: 1px solid #e2e8f0; background: #fff; cursor: pointer; transition: all 0.15s;
+    }
+    .filter-btn.active { background: #4299e1; color: #fff; border-color: #4299e1; }
+
+    .table-wrap { overflow-x: auto; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+    table { width: 100%; border-collapse: collapse; background: #fff; font-size: 0.88rem; }
+    thead th {
+      background: #f7fafc; padding: 0.85rem 1rem; text-align: left;
+      font-weight: 600; color: #4a5568; border-bottom: 2px solid #e2e8f0;
+      white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid #f0f0f0; transition: background 0.15s; }
+    tbody tr:hover { background: #f7fafc; }
+    tbody td { padding: 0.85rem 1rem; vertical-align: middle; }
+
+    .badge {
+      display: inline-block; padding: 0.2rem 0.6rem; border-radius: 20px;
+      font-size: 0.75rem; font-weight: 600;
+    }
+    .badge-eligible   { background: #c6f6d5; color: #276749; }
+    .badge-ineligible { background: #fed7d7; color: #9b2c2c; }
+    .badge-error      { background: #feebc8; color: #7b341e; }
+    .badge-duplicate  { background: #e9d8fd; color: #553c9a; }
+
+    .score-bar-wrap { display: flex; align-items: center; gap: 0.5rem; min-width: 120px; }
+    .score-bar-bg { flex: 1; background: #e2e8f0; border-radius: 99px; height: 6px; }
+    .score-bar-fill { height: 100%; border-radius: 99px; }
+    .score-num { font-weight: 700; font-size: 0.9rem; min-width: 28px; text-align: right; }
+
+    .rank-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 50%; font-weight: 700; font-size: 0.82rem;
+    }
+    .rank-1 { background: #ffd700; color: #7b5e00; }
+    .rank-2 { background: #c0c0c0; color: #4a4a4a; }
+    .rank-3 { background: #cd7f32; color: #fff; }
+    .rank-n { background: #e2e8f0; color: #4a5568; }
+
+    .expand-btn { background: none; border: none; cursor: pointer; color: #4299e1; font-size: 1.1rem; }
+
+    /* Detail panel */
+    .detail-row td { padding: 0; }
+    .detail-panel {
+      background: #f7fafc; border-top: 1px solid #e2e8f0;
+      padding: 1.2rem 1.5rem; display: none;
+    }
+    .detail-panel.open { display: block; }
+    .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+    .detail-section h4 { font-size: 0.8rem; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem; }
+    .detail-section ul { list-style: none; }
+    .detail-section ul li { font-size: 0.83rem; color: #4a5568; padding: 0.15rem 0; }
+    .detail-section ul li::before { content: "• "; color: #4299e1; }
+    .score-breakdown { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+    .score-pill {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+      padding: 0.4rem 0.7rem; font-size: 0.8rem;
+    }
+    .score-pill span { font-weight: 700; color: #4299e1; }
+
+    /* Error / empty */
+    .empty-state { text-align: center; padding: 3rem 1rem; color: #a0aec0; }
+    .empty-state .icon { font-size: 3rem; margin-bottom: 0.5rem; }
+    #error-msg { display: none; background: #fff5f5; border: 1px solid #fed7d7; color: #c53030; border-radius: 8px; padding: 0.8rem 1rem; margin-top: 1rem; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+    <rect width="40" height="40" rx="10" fill="#4299e1" fill-opacity="0.2"/>
+    <path d="M10 28L16 14l6 10 4-6 4 10" stroke="#63b3ed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="30" cy="12" r="4" fill="#4299e1"/>
+  </svg>
+  <div>
+    <h1>AI Resume Screener</h1>
+    <p>Upload resumes · Auto-screen for Python & AI skills · Rank candidates</p>
+  </div>
+</header>
+
+<main>
+  <!-- Upload card -->
+  <div class="card">
+    <h2>📂 Upload Resumes</h2>
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" id="file-input" multiple accept=".pdf,.docx,.txt" />
+      <div class="icon">📄</div>
+      <p>Drop files here or <span>browse</span></p>
+      <p class="hint">Supports PDF, DOCX, TXT</p>
+    </div>
+    <div id="file-list"></div>
+    <div id="error-msg"></div>
+    <div class="actions">
+      <button class="btn btn-primary" id="upload-btn" disabled>
+        <span>🚀</span> Screen Resumes
+      </button>
+      <button class="btn btn-secondary" id="clear-btn">Clear</button>
+    </div>
+    <div id="progress-wrap">
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill"></div></div>
+      <div id="progress-label">Processing…</div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div id="stats-bar" class="card">
+    <div class="stats-grid">
+      <div class="stat-box"><div class="num c-blue"  id="s-total">0</div><div class="lbl">Total Files</div></div>
+      <div class="stat-box"><div class="num c-green" id="s-parsed">0</div><div class="lbl">Parsed</div></div>
+      <div class="stat-box"><div class="num c-orange"id="s-eligible">0</div><div class="lbl">Eligible</div></div>
+      <div class="stat-box"><div class="num c-purple"id="s-dup">0</div><div class="lbl">Duplicates</div></div>
+      <div class="stat-box"><div class="num c-red"   id="s-failed">0</div><div class="lbl">Failed</div></div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results-section" class="card">
+    <div class="section-header">
+      <h2>📊 Candidate Results</h2>
+    </div>
+    <div class="filter-row" id="filter-row">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="eligible">Eligible</button>
+      <button class="filter-btn" data-filter="ineligible">Ineligible</button>
+      <button class="filter-btn" data-filter="error">Errors</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>File</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Score /100</th>
+            <th>GitHub</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+  const dropZone   = document.getElementById('drop-zone');
+  const fileInput  = document.getElementById('file-input');
+  const fileList   = document.getElementById('file-list');
+  const uploadBtn  = document.getElementById('upload-btn');
+  const clearBtn   = document.getElementById('clear-btn');
+  const progressWrap = document.getElementById('progress-wrap');
+  const progressFill = document.getElementById('progress-fill');
+  const progressLabel= document.getElementById('progress-label');
+  const errorMsg   = document.getElementById('error-msg');
+  const statsBar   = document.getElementById('stats-bar');
+  const resultsSection = document.getElementById('results-section');
+  const resultsBody= document.getElementById('results-body');
+
+  let selectedFiles = [];
+
+  // Drag & drop
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    addFiles([...e.dataTransfer.files]);
+  });
+  fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
+
+  function addFiles(files) {
+    files.forEach(f => {
+      if (!selectedFiles.find(x => x.name === f.name && x.size === f.size)) selectedFiles.push(f);
+    });
+    renderFileList();
+  }
+
+  function renderFileList() {
+    fileList.innerHTML = selectedFiles.map((f, i) =>
+      `<div class="file-chip">📄 ${f.name} <button onclick="removeFile(${i})">×</button></div>`
+    ).join('');
+    uploadBtn.disabled = selectedFiles.length === 0;
+  }
+
+  window.removeFile = i => { selectedFiles.splice(i, 1); renderFileList(); };
+
+  clearBtn.addEventListener('click', () => {
+    selectedFiles = []; renderFileList();
+    statsBar.style.display = 'none';
+    resultsSection.style.display = 'none';
+    hideError();
+  });
+
+  // Upload & screen
+  uploadBtn.addEventListener('click', async () => {
+    if (!selectedFiles.length) return;
+    hideError();
+    uploadBtn.disabled = true;
+    progressWrap.style.display = 'block';
+    setProgress(20, 'Uploading resumes…');
+
+    const fd = new FormData();
+    selectedFiles.forEach(f => fd.append('files', f));
+
+    try {
+      setProgress(50, 'Screening candidates…');
+      const res = await fetch('/screen', { method: 'POST', body: fd });
+      if (!res.ok) { const t = await res.text(); throw new Error(t); }
+      const data = await res.json();
+      setProgress(100, 'Done!');
+      setTimeout(() => { progressWrap.style.display = 'none'; }, 600);
+      renderResults(data);
+    } catch (err) {
+      progressWrap.style.display = 'none';
+      showError('Error: ' + err.message);
+    } finally {
+      uploadBtn.disabled = false;
+    }
+  });
+
+  function setProgress(pct, label) {
+    progressFill.style.width = pct + '%';
+    progressLabel.textContent = label;
+  }
+
+  function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
+  function hideError()    { errorMsg.style.display = 'none'; }
+
+  // Render
+  function renderResults(data) {
+    document.getElementById('s-total').textContent   = data.total_files;
+    document.getElementById('s-parsed').textContent  = data.parsed;
+    document.getElementById('s-eligible').textContent= data.eligible;
+    document.getElementById('s-dup').textContent     = data.duplicates;
+    document.getElementById('s-failed').textContent  = data.failed;
+    statsBar.style.display = 'block';
+    resultsSection.style.display = 'block';
+
+    window._records = data.records;
+    applyFilter('all');
+  }
+
+  // Filter buttons
+  document.getElementById('filter-row').addEventListener('click', e => {
+    const btn = e.target.closest('.filter-btn');
+    if (!btn) return;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyFilter(btn.dataset.filter);
+  });
+
+  function applyFilter(f) {
+    const records = window._records || [];
+    const filtered = records.filter(r => {
+      if (f === 'all') return true;
+      if (f === 'eligible')   return r.eligibility?.eligible === true;
+      if (f === 'ineligible') return r.eligibility?.eligible === false && !r.error && !r.is_duplicate;
+      if (f === 'error')      return !!r.error || r.is_duplicate;
+      return true;
+    });
+    buildTable(filtered);
+  }
+
+  function buildTable(records) {
+    if (!records.length) {
+      resultsBody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">🔍</div><p>No records match this filter.</p></div></td></tr>`;
+      return;
+    }
+    resultsBody.innerHTML = records.map((r, idx) => rowHTML(r, idx)).join('');
+  }
+
+  function rowHTML(r, idx) {
+    const status = r.error ? 'error' : r.is_duplicate ? 'duplicate' : r.eligibility?.eligible ? 'eligible' : 'ineligible';
+    const badgeMap = { eligible:'badge-eligible', ineligible:'badge-ineligible', error:'badge-error', duplicate:'badge-duplicate' };
+    const labelMap = { eligible:'✅ Eligible', ineligible:'❌ Ineligible', error:'⚠️ Error', duplicate:'🔁 Duplicate' };
+
+    const score = r.score?.total_score ?? null;
+    const rank  = r.score?.rank ?? null;
+    const ghScore = r.github?.github_score ?? null;
+    const name  = r.candidate?.name || '—';
+
+    const rankHTML = rank
+      ? `<span class="rank-badge ${rank<=3?'rank-'+rank:'rank-n'}">${rank}</span>`
+      : `<span style="color:#a0aec0">—</span>`;
+
+    const scoreHTML = score !== null
+      ? `<div class="score-bar-wrap">
+           <div class="score-bar-bg"><div class="score-bar-fill" style="width:${score}%;background:${scoreColor(score)}"></div></div>
+           <span class="score-num" style="color:${scoreColor(score)}">${score}</span>
+         </div>`
+      : `<span style="color:#a0aec0">—</span>`;
+
+    const ghHTML = ghScore !== null
+      ? `<span style="font-weight:600;color:${scoreColor(ghScore*10)}">${ghScore}/10</span>`
+      : `<span style="color:#a0aec0">—</span>`;
+
+    return `
+      <tr>
+        <td>${rankHTML}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.filename}">${r.filename}</td>
+        <td>${name}</td>
+        <td><span class="badge ${badgeMap[status]}">${labelMap[status]}</span></td>
+        <td>${scoreHTML}</td>
+        <td>${ghHTML}</td>
+        <td><button class="expand-btn" onclick="toggleDetail(this, ${idx})" title="Details">⌄</button></td>
+      </tr>
+      <tr class="detail-row"><td colspan="7"><div class="detail-panel" id="detail-${idx}">${detailHTML(r)}</div></td></tr>`;
+  }
+
+  function detailHTML(r) {
+    if (r.error) return `<p style="color:#c53030">⚠️ ${r.error}</p>`;
+    if (r.is_duplicate) return `<p style="color:#553c9a">🔁 Duplicate file — skipped.</p>`;
+    const c = r.candidate || {};
+    const el = r.eligibility || {};
+    const sc = r.score || {};
+    const gh = r.github || {};
+
+    const skills = (c.skills||[]).join(', ') || '—';
+    const pyEv   = (el.python_evidence||[]);
+    const aiEv   = (el.ai_evidence||[]);
+    const reasons= (el.rejection_reasons||[]);
+    const penalties=(sc.penalties||[]);
+
+    return `<div class="detail-grid">
+      <div class="detail-section">
+        <h4>Contact</h4>
+        <ul>
+          <li>Email: ${c.email||'—'}</li>
+          <li>Phone: ${c.phone||'—'}</li>
+          <li>GitHub: ${c.github_url ? `<a href="${c.github_url}" target="_blank">${c.github_url}</a>` : '—'}</li>
+        </ul>
+      </div>
+      <div class="detail-section">
+        <h4>Skills</h4>
+        <p style="font-size:0.83rem;color:#4a5568">${skills}</p>
+      </div>
+      ${pyEv.length ? `<div class="detail-section"><h4>Python Evidence</h4><ul>${pyEv.map(e=>`<li>${e}</li>`).join('')}</ul></div>` : ''}
+      ${aiEv.length ? `<div class="detail-section"><h4>AI Evidence</h4><ul>${aiEv.map(e=>`<li>${e}</li>`).join('')}</ul></div>` : ''}
+      ${reasons.length ? `<div class="detail-section"><h4>Rejection Reasons</h4><ul>${reasons.map(e=>`<li style="color:#c53030">${e}</li>`).join('')}</ul></div>` : ''}
+      ${sc.total_score !== undefined ? `<div class="detail-section" style="grid-column:1/-1">
+        <h4>Score Breakdown</h4>
+        <div class="score-breakdown">
+          <div class="score-pill">AI Depth <span>${sc.ai_project_depth}/40</span></div>
+          <div class="score-pill">Python/Backend <span>${sc.python_backend}/30</span></div>
+          <div class="score-pill">Cloud/Fullstack <span>${sc.cloud_fullstack}/15</span></div>
+          <div class="score-pill">GitHub <span>${sc.github}/10</span></div>
+          <div class="score-pill">Eng. Depth <span>${sc.engineering_depth}/5</span></div>
+        </div>
+        ${penalties.length ? `<p style="font-size:0.8rem;color:#c53030;margin-top:0.5rem">⚠️ Penalties: ${penalties.join(' | ')}</p>` : ''}
+      </div>` : ''}
+      ${gh.github_summary ? `<div class="detail-section" style="grid-column:1/-1"><h4>GitHub Summary</h4><p style="font-size:0.83rem;color:#4a5568">${gh.github_summary}</p></div>` : ''}
+    </div>`;
+  }
+
+  window.toggleDetail = (btn, idx) => {
+    const panel = document.getElementById('detail-' + idx);
+    const open = panel.classList.toggle('open');
+    btn.textContent = open ? '⌃' : '⌄';
+  };
+
+  function scoreColor(s) {
+    if (s >= 70) return '#48bb78';
+    if (s >= 40) return '#ed8936';
+    return '#fc8181';
+  }
+</script>
+</body>
+</html>
